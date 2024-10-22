@@ -96,6 +96,16 @@ public:
 	//In velocity mode, this is the target speed it will run at.
 	void setVelocity(int32_t velocity);
 
+	//Toggle to enable or disable stealthChop. Use ONLY at standstill. Recommend enabling.
+	void enableStealthChop(bool enabled);
+
+	//Toggle to swap motor direction. Intended to help correct direction after installing motor. Not intended
+	//as a quick "swap direction" during movement.
+	void reverseDirection(bool enabled);
+
+	//Manually set position register. Intended to help reset position counter on MCU restart or when homing.
+	void setPosition(int32_t pos);
+
 	//Check if motor is moving or not.
 	bool isStopped();
 
@@ -105,6 +115,7 @@ public:
 	uint32_t VMAX;
 	uint32_t DMAX;
 	uint32_t D1;
+	uint32_t VSTOP;
 
 protected:
 
@@ -122,6 +133,14 @@ protected:
 	//User-implemented SPI setup function, if needed
 	void Thorlabs_SPI_setup() __attribute__((weak));
 	
+
+private:
+
+	//Quick little function to set starter values to get a stepper up and running.
+	void basicMotorConfig();
+
+
 };
+
 
 #endif /* INC_TMC5130_LIB_H_ */
