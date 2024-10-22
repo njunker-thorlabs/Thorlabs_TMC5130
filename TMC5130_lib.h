@@ -11,8 +11,8 @@ This SPI driver is used to interface the Trinamic TMC5130 Stepper Driver chip.
 #ifndef INC_TMC5130_LIB_H_
 #define INC_TMC5130_LIB_H_
 
-#include "Arduino.h"
-#include <SPI.h>
+#include <cstdint> //for uint8_t, etc
+#include <cstddef> //for size_t
 
 //Register definitions
 #define MCL_GCONF       0x00	// (Address: 0)
@@ -74,7 +74,7 @@ public:
 	} rampMode;
 
 	//Initialize object with SPI bus & CS pin, set default ramp values.
-	void begin(int8_t CS_pin = PIN_SPI_SS);
+	void begin(int8_t CS_pin);
 
 	//Write to a specific register.
 	void write_register(uint8_t addr, uint32_t data);
@@ -106,9 +106,22 @@ public:
 	uint32_t DMAX;
 	uint32_t D1;
 
-private:
-	//TODO make some wrapper functions to obscure register reads/writes
-	int8_t _CS_pin;
+protected:
+
+	int8_t _cs;
+
+	//Our own SPI transfer to facilitate different platforms
+	void Thorlabs_SPI_transfer(void *buf, size_t count) __attribute__((weak));
+
+	//User-implemented SPI begin function, if needed
+	void Thorlabs_SPI_begin() __attribute__((weak));
+
+	//User-implemented SPI end function, if needed
+	void Thorlabs_SPI_end() __attribute__((weak));
+
+	//User-implemented SPI setup function, if needed
+	void Thorlabs_SPI_setup() __attribute__((weak));
+	
 };
 
 #endif /* INC_TMC5130_LIB_H_ */
