@@ -13,6 +13,7 @@ This SPI driver is used to interface the Trinamic TMC5130 Stepper Driver chip.
 
 #include <cstdint> //for uint8_t, etc
 #include <cstddef> //for size_t
+#include <cmath> //for sqrt
 
 //Register definitions
 #define MCL_GCONF       0x00	// (Address: 0)
@@ -81,7 +82,7 @@ public:
 
 	//Read a specific register. Returns the SPI_STATUS bit, with requested register data
 	//located at the provided pointer
-	uint8_t read_register(uint8_t addr, uint32_t data, int32_t* out);
+	uint8_t read_register(uint8_t addr, int32_t* out);
 
 	//Set ramp generator between position, velocity, and hold mode
 	void setRampMode(rampMode mode);
@@ -105,6 +106,23 @@ public:
 
 	//Manually set position register. Intended to help reset position counter on MCU restart or when homing.
 	void setPosition(int32_t pos);
+
+	//Get current stepper position from ramp genreator.
+	int32_t getPosition();
+
+	//Configure motor current limits. Set in Amps, with a max value of 1.35A. iHoldDelay scales between 1-15.
+	//Keep iHoldDelay at default value if not needed.
+	void setCurrentLimits(float iHoldCurrent, float iRunCurrent, int8_t iHoldDelay = 7);
+
+	//Call to update A1, V1, AMAX, VMAX, DMAX, D1, and VSTOP register values if changed.
+	//All values are in uSteps/second
+	void updateMotionProfile();
+
+	//Get current encoder position
+	int32_t getEncoderPosition();
+
+	//Manually set current stepper position. Intended to help reset counter to zero on MCU restart or when homing.
+	void setEncoderPosition(int32_t pos);
 
 	//Check if motor is moving or not.
 	bool isStopped();
@@ -138,7 +156,6 @@ private:
 
 	//Quick little function to set starter values to get a stepper up and running.
 	void basicMotorConfig();
-
 
 };
 

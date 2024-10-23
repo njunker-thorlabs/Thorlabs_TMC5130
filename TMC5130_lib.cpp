@@ -22,8 +22,8 @@ void Thorlabs_TMC5130::begin(int8_t CS_pin)
 
 	Thorlabs_SPI_setup();
 
+	updateMotionProfile();
 	basicMotorConfig();
-	
 }
 
 void Thorlabs_TMC5130::write_register(uint8_t addr, uint32_t data)
@@ -45,17 +45,17 @@ void Thorlabs_TMC5130::write_register(uint8_t addr, uint32_t data)
 	Thorlabs_SPI_end();
 }
 
-uint8_t Thorlabs_TMC5130::read_register(uint8_t addr, uint32_t data, int32_t* out)
+uint8_t Thorlabs_TMC5130::read_register(uint8_t addr, int32_t* out)
 {
 	const int buf_size = 5;
 	uint8_t cmd[buf_size];
 	uint8_t _dummy_cmd[buf_size];
 	//build command word
 	cmd[0] = addr^0x00; // bitwise XOR to set the read byte
-	cmd[1] = (data >> 24) & 0xFF;
-	cmd[2] = (data >> 16) & 0xFF;
-	cmd[3] = (data >> 8) & 0xFF;
-	cmd[4] = data & 0xFF;
+	//cmd[1] = (data >> 24) & 0xFF;
+	//cmd[2] = (data >> 16) & 0xFF;
+	//cmd[3] = (data >> 8) & 0xFF;
+	//cmd[4] = data & 0xFF;
 	
 	for (int i = 0; i < buf_size; i++) {
 		_dummy_cmd[i] = cmd[i];
@@ -86,7 +86,7 @@ void Thorlabs_TMC5130::jog(int32_t uSteps)
 	int32_t buf;
 	int32_t target;
 
-	read_register(MCL_XACTUAL, 0x00, &buf);
+	read_register(MCL_XACTUAL, &buf);
 	target = buf + uSteps;
 	write_register(MCL_XTARGET, target);
 }
@@ -99,7 +99,7 @@ void Thorlabs_TMC5130::moveTo(int32_t pos)
 bool Thorlabs_TMC5130::isStopped()
 {
 	int32_t buf;
-	read_register(MCL_VACTUAL, 0x00, &buf);
+	read_register(MCL_VACTUAL, &buf);
 	if ((int)buf == 0) {
 		return true;
 	}
@@ -126,7 +126,7 @@ void Thorlabs_TMC5130::enableStealthChop(bool enabled)
 
 	int8_t en_pwm_mode_reg_offset = 2;
 
-	read_register(MCL_GCONF, 0x00, &currentConfig);
+	read_register(MCL_GCONF, &currentConfig);
 
 	//Make mask to select en_pwm_mode bit
 	configMask = ~(1 << en_pwm_mode_reg_offset);
@@ -146,18 +146,18 @@ void Thorlabs_TMC5130::reverseDirection(bool enabled)
 	int32_t newConfig;
 	int32_t configMask;
 
-	int8_t en_pwm_mode_reg_offset = 4;
+	int8_t shaft_reg_offset = 4;
 
-	read_register(MCL_GCONF, 0x00, &currentConfig);
+	read_register(MCL_GCONF, &currentConfig);
 
-	//Make mask to select en_pwm_mode bit
-	configMask = ~(1 << en_pwm_mode_reg_offset);
+	//Make mask to select bit
+	configMask = ~(1 << shaft_reg_offset);
 
-	//Reset en_pwm_mode bit from current config
+	//Reset bit from current config
 	newConfig = currentConfig & configMask;
 
-	//Set en_pwm_mode bit to our selection
-	newConfig |= (enabled << en_pwm_mode_reg_offset);
+	//Set bit to our selection
+	newConfig |= (enabled << shaft_reg_offset);
 
 	write_register(MCL_GCONF, newConfig);
 }
@@ -167,7 +167,63 @@ void Thorlabs_TMC5130::setPosition(int32_t pos)
 	write_register(MCL_XACTUAL, pos);
 }
 
-void Thorlabs_TMC5130::basicMotorConfig()
+int32_t Thorlabs_TMC5130::getPosition()
+{
+	int32_t pos;
+	read_register(MCL_XACTUAL, &pos);
+	return pos;
+}
+
+void Thorlabs_TMC5130::setCurrentLimits(float iHoldCurrent, float iRunCurrent, int8_t iHoldDelay)
+{
+	float VfsVoltage;
+	bool VfsBit;
+	float Rsense = 0.15;
+	int8_t iHold, iRun;
+
+	//If above 750mA, use Vsense scaling of 0.32V. Otherwise use scaling of 0.18V.
+	VfsVoltage = (iHoldCurrent > 0.75 || iRunCurrent > 0.75) ? 0.32 : 0.18;
+
+	//Same as above, but getting the actual register value to write
+	VfsBit = ~(iHoldCurrent > 0.75 || iRunCurrent > 0.75);
+
+	//Calculate 5 bit scalar values for iHold and iRun from motor current
+	//Equation is rearranged from section 10 of TMC5130 datasheet
+	iHold = abs(((32 * sqrt(2) * iHoldCurrent * (Rsense + 0.02)) / VfsVoltage) - 1);
+	iRun = abs(((32 * sqrt(2) * iRunCurrent * (Rsense + 0.02)) / VfsVoltage) - 1);
+
+	//Format and write to IHOLD_IRUN register
+	int32_t IHOLD_IRUN_CONFIG;
+	IHOLD_IRUN_CONFIG |= ((iHoldDelay & 0xF) << 16);
+	IHOLD_IRUN_CONFIG |= ((iRun & 0x1F) << 8);
+	IHOLD_IRUN_CONFIG |= (iHold & 0x1F);
+
+	//Write newly formatted IHOLD_IRUN register
+	write_register(MCL_IHOLD_IRUN, IHOLD_IRUN_CONFIG);
+
+	//Format and write to CHOPCONF register based on our Vfs selection
+	int32_t currentChopconf;
+	int32_t newChopconf;
+	int32_t configMask;
+	int8_t vsense_reg_offset = 17;
+
+	//Read current settings so we don't overwrite anything else
+	read_register(MCL_CHOPCONF, &currentChopconf);
+
+	//get bitmask for our specific register
+	configMask = ~(1 << vsense_reg_offset);
+
+	//Reset the bit that we want to modify
+	newChopconf = currentChopconf & configMask;
+
+	//Set the bit to the value we want
+	newChopconf |= (VfsBit << vsense_reg_offset);
+
+	//Write newly formatted settings to register
+	write_register(MCL_CHOPCONF, newChopconf);
+}
+
+void Thorlabs_TMC5130::updateMotionProfile()
 {
 	write_register(MCL_A1, A1); // write value 0x000003E8 = A1 to address 11 = 0x24(A1)
 	write_register(MCL_V1, V1); // write value 0x000088B8 = V1 to address 12 = 0x25(V1)
@@ -176,7 +232,22 @@ void Thorlabs_TMC5130::basicMotorConfig()
 	write_register(MCL_DMAX, DMAX); // write value 0x00002710 = DMAX to address 15 = 0x28(DMAX)
 	write_register(MCL_D1, D1); // write value 0x000003E8 = D1 to address 16 = 0x2A(D1)
 	write_register(MCL_VSTOP, VSTOP); // write value 0x0000000A = 10 = 10.0 to address 17 = 0x2B(VSTOP)
+}
 
+int32_t Thorlabs_TMC5130::getEncoderPosition() 
+{
+	int32_t pos;
+	read_register(MCL_X_ENC, &pos);
+	return pos;
+}
+
+void Thorlabs_TMC5130::setEncoderPosition(int32_t pos)
+{
+	write_register(MCL_X_ENC, pos);
+}
+
+void Thorlabs_TMC5130::basicMotorConfig()
+{
 	//Setting CHOPCONF in here since general user doesn't need to tweak TOFF/HSTRT values
 	write_register(MCL_CHOPCONF, 0x000301D5);
 
@@ -184,14 +255,7 @@ void Thorlabs_TMC5130::basicMotorConfig()
 	write_register(MCL_PWMCONF, 0x000501C8);
 }
 
-//TODO: Add helper function to enable or disable freewheeling
-
-//TODO: add helper function to set iHold and iRun
-
 //TODO: add helper function to set encoder mode and scaling value
-
-//TODO: add helper function(s) to set acceleration and velocity profile parameters
-
 
 
 //-----------------------------------------------------------------------
