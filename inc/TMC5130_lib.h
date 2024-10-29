@@ -139,6 +139,9 @@ protected:
 
 	int8_t _cs;
 
+	//Quick little function to set starter values to get a stepper up and running.
+	void basicMotorConfig();
+
 	//Our own SPI transfer to facilitate different platforms
 	virtual void Thorlabs_SPI_transfer(void *buf, size_t count);
 
@@ -154,8 +157,6 @@ protected:
 
 private:
 
-	//Quick little function to set starter values to get a stepper up and running.
-	void basicMotorConfig();
 
 };
 
