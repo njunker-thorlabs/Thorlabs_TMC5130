@@ -50,12 +50,9 @@ uint8_t Thorlabs_TMC5130::read_register(uint8_t addr, int32_t* out)
 	const int buf_size = 5;
 	uint8_t cmd[buf_size];
 	uint8_t _dummy_cmd[buf_size];
-	//build command word
+
+	//build command word. Rest of cmd word [1-4] is all 0
 	cmd[0] = addr^0x00; // bitwise XOR to set the read byte
-	//cmd[1] = (data >> 24) & 0xFF;
-	//cmd[2] = (data >> 16) & 0xFF;
-	//cmd[3] = (data >> 8) & 0xFF;
-	//cmd[4] = data & 0xFF;
 	
 	for (int i = 0; i < buf_size; i++) {
 		_dummy_cmd[i] = cmd[i];
