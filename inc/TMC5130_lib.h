@@ -135,6 +135,8 @@ public:
 	uint32_t D1;
 	uint32_t VSTOP;
 
+	virtual ~Thorlabs_TMC5130(){}
+
 protected:
 
 	int8_t _cs;
