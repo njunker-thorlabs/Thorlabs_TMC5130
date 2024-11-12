@@ -182,7 +182,7 @@ void Thorlabs_TMC5130::setCurrentLimits(float iHoldCurrent, float iRunCurrent, i
 	VfsVoltage = (iHoldCurrent > 0.75 || iRunCurrent > 0.75) ? 0.32 : 0.18;
 
 	//Same as above, but getting the actual register value to write
-	VfsBit = ~(iHoldCurrent > 0.75 || iRunCurrent > 0.75);
+	VfsBit = !(iHoldCurrent > 0.75 || iRunCurrent > 0.75);
 
 	//Calculate 5 bit scalar values for iHold and iRun from motor current
 	//Equation is rearranged from section 10 of TMC5130 datasheet
@@ -190,7 +190,7 @@ void Thorlabs_TMC5130::setCurrentLimits(float iHoldCurrent, float iRunCurrent, i
 	iRun = abs(((32 * sqrt(2) * iRunCurrent * (Rsense + 0.02)) / VfsVoltage) - 1);
 
 	//Format and write to IHOLD_IRUN register
-	int32_t IHOLD_IRUN_CONFIG;
+	int32_t IHOLD_IRUN_CONFIG = 0;
 	IHOLD_IRUN_CONFIG |= ((iHoldDelay & 0xF) << 16);
 	IHOLD_IRUN_CONFIG |= ((iRun & 0x1F) << 8);
 	IHOLD_IRUN_CONFIG |= (iHold & 0x1F);
